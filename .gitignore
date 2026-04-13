@@ -1,6 +1,9 @@
-# Environment
+# Environment & secrets
 .env
+.session
 config.local.py
+
+# Python
 venv/
 .venv/
 __pycache__/

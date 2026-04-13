@@ -70,6 +70,43 @@ class Display:
         if not IS_PI:
             self._print_terminal()
 
+    def show_qr(self, url):
+        """
+        During setup: show the auth URL as a QR code.
+        On Pi: render QR image onto OLED (small but scannable up close).
+        On Mac: handled by setup_device._print_qr_terminal(), nothing extra needed.
+        """
+        if not IS_PI:
+            return
+
+        import qrcode
+        from PIL import Image
+
+        qr = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_L,
+            box_size=1,
+            border=1,
+        )
+        qr.add_data(url)
+        qr.make(fit=True)
+
+        qr_img = qr.make_image(fill_color="white", back_color="black").convert("1")
+
+        # Scale to fit OLED height, leaving top 12px for label
+        available_h = 52
+        scale = max(1, available_h // qr_img.size[1])
+        qr_img = qr_img.resize(
+            (qr_img.size[0] * scale, qr_img.size[1] * scale),
+            Image.NEAREST,
+        )
+
+        frame = Image.new("1", (128, 64), 0)
+        frame.paste(qr_img, (0, 12))
+
+        with canvas(self._device) as draw:
+            draw.text((0, 0), "Scan to set up", font=self._font, fill="white")
+            self._device.display(frame)
+
     def clear(self):
         if IS_PI:
             self._running = False

@@ -3,26 +3,20 @@ import pylast
 from config import (
     LASTFM_API_KEY,
     LASTFM_API_SECRET,
-    LASTFM_USERNAME,
-    LASTFM_PASSWORD,
     MIN_PLAY_SECONDS,
     MIN_PLAY_RATIO,
 )
 
 
 class Scrobbler:
-    def __init__(self):
-        if not all([LASTFM_API_KEY, LASTFM_API_SECRET, LASTFM_USERNAME, LASTFM_PASSWORD]):
-            raise RuntimeError("Last.fm credentials are not set in .env")
-
+    def __init__(self, session_key):
         self.network = pylast.LastFMNetwork(
             api_key=LASTFM_API_KEY,
             api_secret=LASTFM_API_SECRET,
-            username=LASTFM_USERNAME,
-            password_hash=pylast.md5(LASTFM_PASSWORD),
+            session_key=session_key,
         )
-        self._current = None       # dict: artist, title, duration
-        self._started_at = None    # timestamp when current track was first detected
+        self._current = None
+        self._started_at = None
 
     @property
     def current(self):
@@ -30,9 +24,9 @@ class Scrobbler:
 
     def track_changed(self, new_track):
         """
-        Call this when a new track is identified.
+        Call when a new track is identified.
         Scrobbles the previous track if it qualifies, then updates state.
-        Returns True if the track actually changed, False if it's the same one.
+        Returns True if the track actually changed.
         """
         new_id = (new_track["artist"].lower(), new_track["title"].lower())
         current_id = (
@@ -55,11 +49,9 @@ class Scrobbler:
     def _maybe_scrobble(self):
         played = time.time() - self._started_at
         duration = self._current.get("duration", 0)
-
-        long_enough = played >= MIN_PLAY_SECONDS
         enough_ratio = (played / duration >= MIN_PLAY_RATIO) if duration else True
 
-        if long_enough and enough_ratio:
+        if played >= MIN_PLAY_SECONDS and enough_ratio:
             self._scrobble(self._current, self._started_at)
 
     def _update_now_playing(self):
@@ -78,6 +70,6 @@ class Scrobbler:
                 title=track["title"],
                 timestamp=int(start_time),
             )
-            print(f"  [scrobbled] {track['artist']} — {track['title']}")
+            print(f"\n  [scrobbled] {track['artist']} — {track['title']}")
         except Exception as e:
             print(f"  [error] scrobble: {e}")

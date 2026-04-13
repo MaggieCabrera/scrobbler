@@ -1,0 +1,4 @@
+# Additional dependencies for Raspberry Pi
+-r requirements.txt
+luma.oled         # MIT — SSD1306 OLED driver
+RPi.GPIO          # MIT — GPIO button + LED

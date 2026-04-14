@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Physical Media Scrobbler
-Listens via microphone, identifies tracks with AcoustID, scrobbles to Last.fm.
+Listens via microphone, identifies tracks with Shazam, scrobbles to Last.fm.
 
 First run: shows a QR code to authenticate with Last.fm.
 After that: runs automatically, no interaction needed.
@@ -21,27 +21,24 @@ from button import Button
 from config import LASTFM_API_KEY, LASTFM_API_SECRET
 
 listening = True
-running = True
 
 
 def main():
-    global listening, running
+    global listening
 
     display = Display()
 
     # ── Auth ────────────────────────────────────────────────────────────────
-    # Build an unauthenticated network object (needed to get the auth token).
-    network = pylast.LastFMNetwork(
-        api_key=LASTFM_API_KEY,
-        api_secret=LASTFM_API_SECRET,
-    )
-
     if setup_device.session_exists():
         session = setup_device.load_session()
         session_key = session["session_key"]
-        username = session["username"]
-        print(f"\n  Welcome back, {username}.\n")
+        username = session.get("username") or ""
+        print(f"\n  Welcome back, {username or 'User'}.\n")
     else:
+        network = pylast.LastFMNetwork(
+            api_key=LASTFM_API_KEY,
+            api_secret=LASTFM_API_SECRET,
+        )
         session_key, username = setup_device.run(network, display)
 
     # ── Ready ────────────────────────────────────────────────────────────────
@@ -54,7 +51,6 @@ def main():
         print(f"\n\n  {'[on]' if state else '[paused]'}\n")
 
     def on_shutdown():
-        global running
         print("\n\n  Shutting down...")
         display.clear()
         button.cleanup()
@@ -70,34 +66,43 @@ def main():
     display.show_status("listening...")
 
     # ── Main loop ────────────────────────────────────────────────────────────
-    while running:
+    while True:
         if not listening:
             time.sleep(0.5)
             continue
 
-        display.show_status("listening...")
+        # During capture: keep showing the track if we have one, else "listening..."
+        if not scrobbler.current:
+            display.show_status("listening...")
         audio = capture()
 
         if not listening:
             continue
 
+        # Always show "identifying..." during the Shazam API call
         display.show_status("identifying...")
         result = identify(audio)
 
         if result:
             changed = scrobbler.track_changed(result)
             if changed:
-                display.show_track(result["artist"], result["title"])
+                display.show_track(result["artist"], result["title"], result.get("cover", ""))
                 print(
                     f"\n\n  Now playing: {result['artist']} — {result['title']}"
                     f"  (confidence: {result['score']:.0%})\n"
                 )
+            else:
+                # Same track — restore track display (was overwritten by "identifying...")
+                cur = scrobbler.current
+                display.show_track(cur["artist"], cur["title"], cur.get("cover", ""))
         else:
+            # No match — show clearly, then revert to last known track
+            print("  [no match]")
+            display.show_status("no match")
+            time.sleep(3)
             if scrobbler.current:
-                display.show_track(
-                    scrobbler.current["artist"],
-                    scrobbler.current["title"],
-                )
+                cur = scrobbler.current
+                display.show_track(cur["artist"], cur["title"], cur.get("cover", ""))
 
 
 if __name__ == "__main__":

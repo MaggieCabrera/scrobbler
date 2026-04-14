@@ -1,3 +1,4 @@
+import threading
 import time
 import pylast
 from config import (
@@ -52,14 +53,24 @@ class Scrobbler:
         enough_ratio = (played / duration >= MIN_PLAY_RATIO) if duration else True
 
         if played >= MIN_PLAY_SECONDS and enough_ratio:
-            self._scrobble(self._current, self._started_at)
+            threading.Thread(
+                target=self._scrobble,
+                args=(self._current, self._started_at),
+                daemon=True,
+            ).start()
 
     def _update_now_playing(self):
+        artist = self._current["artist"]
+        title = self._current["title"]
+        threading.Thread(
+            target=self._do_update_now_playing,
+            args=(artist, title),
+            daemon=True,
+        ).start()
+
+    def _do_update_now_playing(self, artist, title):
         try:
-            self.network.update_now_playing(
-                artist=self._current["artist"],
-                title=self._current["title"],
-            )
+            self.network.update_now_playing(artist=artist, title=title)
         except Exception as e:
             print(f"  [error] now playing: {e}")
 

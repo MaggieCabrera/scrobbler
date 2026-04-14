@@ -13,7 +13,9 @@ if IS_PI:
     from luma.core.interface.serial import i2c
     from luma.oled.device import ssd1306
     from luma.core.render import canvas
-    from PIL import ImageFont
+    from PIL import ImageFont, ImageDraw
+else:
+    import web_display
 
 
 class Display:
@@ -38,6 +40,8 @@ class Display:
         self._has_track = False
         self._scroll_x = 0
         self._scroll_pause_ticks = 0
+        self._title_px = 0
+        self._qr_frame = None
 
         if IS_PI:
             serial = i2c(port=1, address=0x3C)
@@ -49,25 +53,32 @@ class Display:
             except OSError:
                 self._font = ImageFont.load_default()
 
-            # Scroll thread — only needed on Pi for OLED animation
             self._running = True
             t = threading.Thread(target=self._scroll_loop, daemon=True)
             t.start()
+        else:
+            web_display.start()
 
-    def show_track(self, artist, title):
+    def show_track(self, artist, title, cover=""):
         self._artist = artist
         self._title = title
         self._has_track = True
         self._scroll_x = 0
         self._scroll_pause_ticks = self.SCROLL_PAUSE
+        self._title_px = len(title) * 7  # rough char width; used by scroll logic
+        self._qr_frame = None
 
         if not IS_PI:
+            web_display.set_track(artist, title, cover)
             self._print_terminal()
 
     def show_status(self, message):
         self._has_track = False
         self._status = message
+        self._qr_frame = None
+
         if not IS_PI:
+            web_display.set_status(message)
             self._print_terminal()
 
     def show_qr(self, url):
@@ -77,6 +88,7 @@ class Display:
         On Mac: handled by setup_device._print_qr_terminal(), nothing extra needed.
         """
         if not IS_PI:
+            web_display.set_qr(url)
             return
 
         import qrcode
@@ -103,9 +115,11 @@ class Display:
         frame = Image.new("1", (128, 64), 0)
         frame.paste(qr_img, (0, 12))
 
-        with canvas(self._device) as draw:
-            draw.text((0, 0), "Scan to set up", font=self._font, fill="white")
-            self._device.display(frame)
+        # Draw label directly onto the frame so the scroll loop can display it.
+        draw = ImageDraw.Draw(frame)
+        draw.text((0, 0), "Scan to set up", font=self._font, fill="white")
+
+        self._qr_frame = frame  # scroll loop picks this up
 
     def clear(self):
         if IS_PI:
@@ -124,6 +138,10 @@ class Display:
             time.sleep(self.TICK_INTERVAL)
 
     def _draw_oled(self):
+        if self._qr_frame is not None:
+            self._device.display(self._qr_frame)
+            return
+
         with canvas(self._device) as draw:
             if not self._has_track:
                 draw.text((0, 26), self._status, font=self._font, fill="white")
@@ -135,16 +153,14 @@ class Display:
             # Title — scrolling marquee on bottom half
             draw.text((128 - self._scroll_x, 34), self._title, font=self._font, fill="white")
 
-        # Advance scroll
-        title_px = len(self._title) * 7  # rough char width
-        if title_px <= 128:
+        if self._title_px <= 128:
             return  # title fits, no scroll needed
 
         if self._scroll_pause_ticks > 0:
             self._scroll_pause_ticks -= 1
         else:
             self._scroll_x += self.SCROLL_SPEED
-            if self._scroll_x > title_px + 128:
+            if self._scroll_x > self._title_px + 128:
                 self._scroll_x = 0
                 self._scroll_pause_ticks = self.SCROLL_PAUSE
 

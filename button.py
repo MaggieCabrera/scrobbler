@@ -64,8 +64,10 @@ class Button:
     def _keyboard_loop(self):
         """Mac dev input — runs in background thread."""
         while True:
-            cmd = sys.stdin.readline().strip()
-            if cmd.lower() == "q":
+            line = sys.stdin.readline()
+            if not line:
+                break  # EOF — stdin closed (e.g. running non-interactively)
+            if line.strip().lower() == "q":
                 self._on_shutdown()
             else:
                 self._toggle()

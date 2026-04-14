@@ -1,7 +1,7 @@
 # Core (Mac + Pi)
 sounddevice       # BSD — audio capture
 numpy             # BSD — audio data
-pyacoustid        # MIT — fingerprinting + AcoustID API
+shazamio          # MIT — track identification
 pylast            # Apache 2.0 — Last.fm scrobbling
 Pillow            # HPND — image rendering
 python-dotenv     # BSD — loads .env

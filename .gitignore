@@ -3,6 +3,9 @@
 .session
 config.local.py
 
+# Node
+node_modules/
+
 # Python
 venv/
 .venv/
